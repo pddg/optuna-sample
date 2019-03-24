@@ -1,0 +1,14 @@
+version: "2.4"
+services:
+  default:
+    image: optuna-test
+    build:
+      context: .
+    runtime: nvidia
+    command: 100 -g 0 --prune-with none
+  median:
+    extends: default
+    command: 100 -g 0 --prune-with median
+  asha:
+    extends: default
+    command: 100 -g 0 --prune-with asha
