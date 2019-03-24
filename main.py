@@ -28,7 +28,7 @@ class MLP(chainer.Chain):
         return self.l3(h2)
 
 # 目的関数を設定する
-def objective(trial, device, train_data, test_data):
+def objective(trial, device, train_data, test_data, prune):
     # trialからパラメータを取得
     n_unit = trial.suggest_int("n_unit", 8, 128)
     batch_size = trial.suggest_int("batch_size", 2, 128)
@@ -56,10 +56,11 @@ def objective(trial, device, train_data, test_data):
     trainer.extend(extensions.Evaluator(test_iter, model, device=device))
     # Optunaとのインテグレーションのためのextensionを追加
     # trialオブジェクト，監視するメトリクス，監視する頻度を指定
-    integrator = optuna.integration.ChainerPruningExtension(
-        trial, 'validation/main/accuracy', (1, 'epoch')
-    )
-    trainer.extend(integrator)
+    if prune:
+        integrator = optuna.integration.ChainerPruningExtension(
+            trial, 'validation/main/accuracy', (1, 'epoch')
+        )
+        trainer.extend(integrator)
 
     # 学習を実行
     trainer.run()
@@ -79,7 +80,10 @@ if __name__ == "__main__":
     # MNISTデータを読み込む
     train, test = chainer.datasets.get_mnist()
     # 目的関数にパラメータを渡す
-    obj = functools.partial(objective, device=args.gpu, train_data=train, test_data=test)
+    obj = functools.partial(
+            objective, device=args.gpu, train_data=train, 
+            test_data=test, prune=True if args.prune_with != 'none' else False
+    )
 
     # Prunerを作成
     if args.prune_with == 'none':
