@@ -50,7 +50,18 @@ def objective(trial, device, train_data, test_data, prune):
                                                  repeat=False, shuffle=False)
     updater = training.updaters.StandardUpdater(
                     train_iter, optimizer, device=device)
-    trainer = training.Trainer(updater, (epoch, 'epoch'), out='output')
+    early_trigger = training.triggers.EarlyStoppingTrigger(
+        check_trigger=(1, "epoch"),
+        monitor="validation/main/accuracy",
+        patients=3,
+        mode="max",
+        max_trigger=(epoch, "epoch")
+    )
+    trainer = training.Trainer(updater, early_trigger, out='output')
+
+    # 実行中のログを取る
+    log_reporter = extensions.LogReport()
+    trainer.extend(log_reporter)
 
     # validationをするextensionを追加
     trainer.extend(extensions.Evaluator(test_iter, model, device=device))
@@ -65,8 +76,16 @@ def objective(trial, device, train_data, test_data, prune):
     # 学習を実行
     trainer.run()
 
+    # Accuracyが最大のものを探す
+    observed_log = log_reporter.log
+    observed_log.sort(key=lambda x: x['validation/main/accuracy'])
+    best_epoch = observed_log[-1]
+
+    # 何epoch目がベストだったかを記録しておく
+    trial.set_user_attr('epoch', best_epoch['epoch'])
+
     # accuracyを評価指標として用いる
-    return 1 - trainer.observation['validation/main/accuracy']
+    return 1 - best_epoch['validation/main/accuracy']
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -110,6 +129,7 @@ if __name__ == "__main__":
     # 最良のケース
     print("[Best Params]")
     best = study.best_trial
+    print("Epoch:", best.user_attrs.get('epoch'))
     print("Accuracy:", 1 - best.value)
     print("Batch size:", best.params['batch_size'])
     print("N unit:", best.params['n_unit'])
